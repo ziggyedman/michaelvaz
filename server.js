@@ -2,6 +2,7 @@ const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
 const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -10,8 +11,46 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// ── Email: Send ────────────────────────────────────────────────
-app.post("/api/send", async (req, res) => {
+// ── Auth ──────────────────────────────────────────────────────
+// Configure users via USERS env var: "alice:pass1,bob:pass2"
+// Defaults to admin:admin for local development
+function parseUsers(str) {
+  const map = {};
+  for (const pair of str.split(",")) {
+    const idx = pair.indexOf(":");
+    if (idx < 1) continue;
+    map[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+  }
+  return map;
+}
+const USERS = parseUsers(process.env.USERS || "admin:admin");
+const sessions = new Map(); // token → username
+
+function requireAuth(req, res, next) {
+  const token = req.headers["x-session-token"];
+  if (!token || !sessions.has(token)) return res.status(401).json({ error: "Unauthorized" });
+  req.user = sessions.get(token);
+  next();
+}
+
+app.post("/api/auth/login", (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password || USERS[username] !== password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+  const token = crypto.randomUUID();
+  sessions.set(token, username);
+  return res.json({ token, username });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const token = req.headers["x-session-token"];
+  if (token) sessions.delete(token);
+  return res.json({ ok: true });
+});
+
+// ── Email: Send ────────────────────────────────────────────────────────────────
+app.post("/api/send", requireAuth, async (req, res) => {
   const { apiKey, from, to, subject, html } = req.body;
   if (!apiKey || !from || !to || !subject || !html) {
     return res.status(400).json({ error: "Missing required fields: apiKey, from, to, subject, html" });
@@ -31,7 +70,7 @@ app.post("/api/send", async (req, res) => {
 });
 
 // ── Email: List Resend account templates ───────────────────────
-app.get("/api/templates", async (req, res) => {
+app.get("/api/templates", requireAuth, async (req, res) => {
   const apiKey = req.headers["x-api-key"];
   if (!apiKey) return res.status(400).json({ error: "Missing x-api-key header" });
   try {
@@ -47,7 +86,7 @@ app.get("/api/templates", async (req, res) => {
 });
 
 // ── Email: Get single Resend template ──────────────────────────
-app.get("/api/templates/:id", async (req, res) => {
+app.get("/api/templates/:id", requireAuth, async (req, res) => {
   const apiKey = req.headers["x-api-key"];
   if (!apiKey) return res.status(400).json({ error: "Missing x-api-key header" });
   try {
@@ -84,11 +123,11 @@ const REACT_EMAIL_TEMPLATES = [
   { name: "Plaid / Verify Identity",       path: "magic-links/plaid-verify-identity" },
 ];
 
-app.get("/api/react-email-templates", (req, res) => {
+app.get("/api/react-email-templates", requireAuth, (req, res) => {
   res.json({ templates: REACT_EMAIL_TEMPLATES });
 });
 
-app.get("/api/react-email-templates/source", async (req, res) => {
+app.get("/api/react-email-templates/source", requireAuth, async (req, res) => {
   const { path: tplPath } = req.query;
   if (!tplPath) return res.status(400).json({ error: "Missing path" });
 
@@ -329,7 +368,7 @@ function parseDnsRecords(records, type) {
     });
 }
 
-app.get("/api/dns", async (req, res) => {
+app.get("/api/dns", requireAuth, async (req, res) => {
   const { domain, type = "ANY" } = req.query;
   if (!domain) return res.status(400).json({ error: "Missing domain query parameter" });
   const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
@@ -362,7 +401,7 @@ app.get("/api/dns", async (req, res) => {
 });
 
 // ── SPF / DKIM / DMARC Diagnostics ────────────────────────────
-app.get("/api/dns/email-diag", async (req, res) => {
+app.get("/api/dns/email-diag", requireAuth, async (req, res) => {
   const { domain } = req.query;
   if (!domain) return res.status(400).json({ error: "Missing domain parameter" });
   const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
@@ -403,6 +442,7 @@ app.get("/api/dns/email-diag", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n  ✉  Resend Email Tester + DNS Lookup`);
+  console.log(`\n  ✉  Resend Support Toolkit`);
   console.log(`  →  http://localhost:${PORT}\n`);
+  console.log(`  Users: ${Object.keys(USERS).join(", ")}\n`);
 });

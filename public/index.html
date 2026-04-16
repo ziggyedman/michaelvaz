@@ -53,6 +53,9 @@
     [data-theme="light"] .theme-toggle-thumb { transform:translateX(18px); }
     .theme-toggle-label { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-dim); letter-spacing:.06em; text-transform:uppercase; user-select:none; }
 
+    .logout-btn { font-family:'IBM Plex Mono',monospace; font-size:11px; padding:5px 11px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--text-dim); cursor:pointer; transition:all .15s; white-space:nowrap; }
+    .logout-btn:hover { border-color:var(--red); color:var(--red); }
+
     .workspace { display:flex; overflow:hidden; height:100%; }
 
     .nav-sidebar {
@@ -97,7 +100,6 @@
     .btn-sm { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; padding:6px 12px; border-radius:6px; border:1px solid var(--border-hi); background:var(--panel2); color:var(--text); cursor:pointer; white-space:nowrap; transition:all .15s; }
     .btn-sm:hover { border-color:var(--accent); color:var(--accent); }
     .btn-sm:disabled { opacity:.35; cursor:not-allowed; }
-
 
     textarea { width:100%; min-height:240px; background:var(--panel); border:1px solid var(--border); border-radius:6px; color:var(--text-hi); font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.65; padding:14px 16px; resize:vertical; outline:none; transition:border-color .15s, box-shadow .15s; tab-size:2; }
     textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-lo); }
@@ -150,6 +152,8 @@
 
     .result-footer { padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0; display:none; }
     .result-footer.show { display:block; }
+    .export-row { display:flex; gap:6px; margin-bottom:8px; }
+    .export-row .btn-sm { flex:1; text-align:center; }
     .clear-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:9px 14px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; background:var(--panel); border:1px solid var(--border); color:var(--text-dim); cursor:pointer; transition:all .15s; letter-spacing:.04em; }
     .clear-btn:hover { border-color:var(--red); color:var(--red); background:var(--red-lo); }
 
@@ -187,6 +191,8 @@
     .dns-type-label.CNAME { background:rgba(56,189,248,.12); color:var(--cyan); border:1px solid rgba(56,189,248,.2); }
     .dns-type-label.NS { background:rgba(92,138,255,.12); color:var(--accent); border:1px solid rgba(92,138,255,.2); }
     .dns-type-label.SOA { background:rgba(245,144,74,.12); color:var(--orange); border:1px solid rgba(245,144,74,.2); }
+    .dns-type-label.SRV { background:rgba(56,189,248,.12); color:var(--cyan); border:1px solid rgba(56,189,248,.2); }
+    .dns-type-label.CAA { background:rgba(245,144,74,.12); color:var(--orange); border:1px solid rgba(245,144,74,.2); }
     .dns-type-label.ERR { background:var(--red-lo); color:var(--red); border:1px solid rgba(240,103,121,.2); }
 
     .diag-check { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12px; }
@@ -218,6 +224,14 @@
     .tool-view { display:none; flex-direction:column; gap:20px; }
     .tool-view.active { display:flex; }
 
+    /* ── Login overlay ── */
+    .login-overlay { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000; }
+    .login-overlay.hidden { display:none; }
+    .login-card { width:340px; background:var(--surface); border:1px solid var(--border-hi); border-radius:10px; padding:28px; display:flex; flex-direction:column; gap:18px; }
+    .login-logo { display:flex; align-items:center; gap:12px; }
+    .login-logo-text { display:flex; flex-direction:column; gap:1px; }
+    .login-err { background:var(--red-lo); border:1px solid rgba(240,103,121,.25); color:var(--red); border-radius:6px; padding:9px 13px; font-family:'IBM Plex Mono',monospace; font-size:12px; }
+
     @media (max-width:900px) {
       .workspace { flex-direction:column; }
       .nav-sidebar { width:100%; flex-direction:row; padding:8px; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto; }
@@ -227,12 +241,39 @@
   </style>
 </head>
 <body>
+
+<!-- ── Login overlay ─────────────────────────────────────────── -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-mark" style="width:36px;height:36px;font-size:16px;flex-shrink:0">✉</div>
+      <div class="login-logo-text">
+        <span class="logo-text" style="font-size:14px">resend</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim)">support toolkit</span>
+      </div>
+    </div>
+    <div class="login-err" id="loginErr" style="display:none"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label>Username</label>
+        <input type="text" id="loginUser" placeholder="username" autocomplete="username" style="margin-top:6px" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()" />
+      </div>
+      <div>
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" style="margin-top:6px" onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+    </div>
+    <button class="send-btn" id="loginBtn" onclick="doLogin()"><span id="loginBtnIcon">→</span><span id="loginBtnLabel">Sign in</span></button>
+  </div>
+</div>
+
 <div class="shell">
   <header>
     <div class="logo-mark">✉</div>
     <span class="logo-text">resend</span><span class="logo-sep">/</span><span class="logo-text" style="color:var(--text-dim)">support toolkit</span>
-    <span class="hdr-badge">v2.2</span>
+    <span class="hdr-badge">v2.3</span>
     <span class="hdr-spacer"></span>
+    <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none"><span id="logoutUser"></span> · Sign out</button>
     <div class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">
       <span class="theme-toggle-label" id="themeLabel">dark</span>
       <div class="theme-toggle-track"><div class="theme-toggle-thumb" id="themeThumb"><span id="themeIcon">🌙</span></div></div>
@@ -251,7 +292,7 @@
       <div class="tool-view active" id="tool-email">
         <div class="pane-title"><span class="pane-title-dot"></span> Email Tester</div>
         <div class="section"><label>Resend API Key</label><div class="api-wrap"><input type="password" id="apiKey" placeholder="re_••••••••••••••••••••••••••••••••" autocomplete="off" /><button class="eye-btn" id="eyeBtn"><svg id="eyeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
-        <div class="section"><div class="field-row"><div><label>From</label><input type="text" id="from" placeholder="you@yourdomain.com" style="margin-top:6px" /></div><div><label>To</label><input type="text" id="to" placeholder="recipient@example.com" style="margin-top:6px" /></div></div></div>
+        <div class="section"><div class="field-row"><div><label>From</label><input type="text" id="from" list="fromHistoryList" placeholder="you@yourdomain.com" style="margin-top:6px" /></div><div><label>To</label><input type="text" id="to" list="toHistoryList" placeholder="recipient@example.com" style="margin-top:6px" /></div></div></div>
         <div class="section"><label>Subject</label><input type="text" id="subject" placeholder="Your email subject…" /></div>
         <div class="section">
           <div class="editor-label-row"><label>Body (HTML)</label><div class="tab-row"><button class="tab-btn active" id="tabCode" onclick="switchEditorTab('code')">Code</button><button class="tab-btn" id="tabPreview" onclick="switchEditorTab('preview')">Preview</button></div></div>
@@ -278,7 +319,7 @@
       <!-- DNS TOOL -->
       <div class="tool-view" id="tool-dns">
         <div class="pane-title"><span class="pane-title-dot" style="background:var(--cyan)"></span> DNS Lookup</div>
-        <div class="section"><label>Domain</label><div class="dns-lookup-bar" style="margin-top:6px"><div class="domain-wrap" style="flex:1"><input type="text" id="dnsDomain" placeholder="example.com" autocomplete="off" onkeydown="if(event.key==='Enter') dnsLookup()" /></div><button class="lookup-btn" id="lookupBtn" onclick="dnsLookup()"><span id="lookupIcon">⌕</span><span id="lookupLabel">Lookup</span></button></div></div>
+        <div class="section"><label>Domain</label><div class="dns-lookup-bar" style="margin-top:6px"><div class="domain-wrap" style="flex:1"><input type="text" id="dnsDomain" list="domainHistoryList" placeholder="example.com" autocomplete="off" onkeydown="if(event.key==='Enter') dnsLookup()" /></div><button class="lookup-btn" id="lookupBtn" onclick="dnsLookup()"><span id="lookupIcon">⌕</span><span id="lookupLabel">Lookup</span></button></div></div>
         <div class="section"><label>Record Type</label><div class="type-grid" style="margin-top:6px" id="typeChips">
           <button class="type-chip sel-any" data-type="ANY" onclick="selectType(this)">ANY</button>
           <button class="type-chip" data-type="MX" onclick="selectType(this)">MX</button>
@@ -288,6 +329,8 @@
           <button class="type-chip" data-type="CNAME" onclick="selectType(this)">CNAME</button>
           <button class="type-chip" data-type="NS" onclick="selectType(this)">NS</button>
           <button class="type-chip" data-type="SOA" onclick="selectType(this)">SOA</button>
+          <button class="type-chip" data-type="SRV" onclick="selectType(this)">SRV</button>
+          <button class="type-chip" data-type="CAA" onclick="selectType(this)">CAA</button>
         </div></div>
         <div class="section" style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 16px;gap:10px">
           <label style="color:var(--accent)">⚡ Email Diagnostics</label>
@@ -296,6 +339,7 @@
             <button class="btn-sm" onclick="quickLookup('MX')">MX Records</button>
             <button class="btn-sm" onclick="quickLookup('TXT')">SPF / DKIM / DMARC</button>
             <button class="btn-sm" onclick="quickLookup('CNAME')">CNAME</button>
+            <button class="btn-sm" onclick="quickLookup('CAA')">CAA</button>
             <button class="btn-sm" style="border-color:var(--purple);color:var(--purple)" onclick="runEmailDiag()">Full Email Diagnostics</button>
           </div>
         </div>
@@ -309,11 +353,22 @@
     <div class="result-pane" id="resultPane">
       <div class="pane-header"><div class="status-dot" id="statusDot"></div>Result<span id="resultCount" style="margin-left:auto;color:var(--muted);font-weight:400"></span></div>
       <div class="result-body" id="resultBody"><div class="empty-state" id="emptyState"><div class="empty-icon">📭</div><div class="empty-label">No results yet</div></div></div>
-      <div class="result-footer" id="resultFooter"><button class="clear-btn" onclick="clearResults()"><span style="font-size:13px">🗑</span> Clear All Results</button></div>
+      <div class="result-footer" id="resultFooter">
+        <div class="export-row">
+          <button class="btn-sm" onclick="exportJSON()">↓ JSON</button>
+          <button class="btn-sm" onclick="exportCSV()">↓ CSV</button>
+        </div>
+        <button class="clear-btn" onclick="clearResults()"><span style="font-size:13px">🗑</span> Clear All Results</button>
+      </div>
     </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- History datalists -->
+<datalist id="fromHistoryList"></datalist>
+<datalist id="toHistoryList"></datalist>
+<datalist id="domainHistoryList"></datalist>
 
 <script>
 // ── Theme ─────────────────────────────────────────────────────
@@ -391,13 +446,138 @@ document.getElementById('eyeBtn').addEventListener('click',()=>{
     :'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 });
 
+// ── Auth ─────────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('rstt_token'); }
+function getUser()  { return localStorage.getItem('rstt_user'); }
+
+function showLogin() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('loginErr').style.display = 'none';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  setTimeout(()=>document.getElementById('loginUser').focus(), 50);
+}
+
+function hideLogin(username) {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  const btn = document.getElementById('logoutBtn');
+  btn.style.display = '';
+  document.getElementById('logoutUser').textContent = username;
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  if (!username || !password) { showLoginErr('Enter username and password'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  document.getElementById('loginBtnIcon').innerHTML = '<div class="spinner"></div>';
+  document.getElementById('loginBtnLabel').textContent = 'Signing in…';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showLoginErr(data.error || 'Login failed'); return; }
+    localStorage.setItem('rstt_token', data.token);
+    localStorage.setItem('rstt_user', data.username);
+    hideLogin(data.username);
+    initApp();
+  } catch(e) { showLoginErr('Network error: ' + e.message); }
+  finally {
+    btn.disabled = false;
+    document.getElementById('loginBtnIcon').textContent = '→';
+    document.getElementById('loginBtnLabel').textContent = 'Sign in';
+  }
+}
+
+function showLoginErr(msg) {
+  const el = document.getElementById('loginErr');
+  el.textContent = msg; el.style.display = '';
+}
+
+async function doLogout() {
+  const token = getToken();
+  if (token) {
+    try { await fetch('/api/auth/logout', { method:'POST', headers:{'x-session-token':token} }); } catch {}
+  }
+  localStorage.removeItem('rstt_token');
+  localStorage.removeItem('rstt_user');
+  showLogin();
+}
+
+// Authenticated fetch — auto-attaches session token, redirects to login on 401
+async function authFetch(url, opts = {}) {
+  const token = getToken();
+  opts.headers = { ...(opts.headers || {}), ...(token ? {'x-session-token': token} : {}) };
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    localStorage.removeItem('rstt_token');
+    localStorage.removeItem('rstt_user');
+    showLogin();
+    throw new Error('Session expired. Please sign in again.');
+  }
+  return res;
+}
+
+// Check session on load
+window.addEventListener('DOMContentLoaded', () => {
+  const token = getToken(), user = getUser();
+  if (token && user) { hideLogin(user); initApp(); }
+  else showLogin();
+});
+
+function initApp() {
+  refreshHistoryDatalist('domains');
+  refreshHistoryDatalist('emails');
+  loadReactEmailList();
+}
+
+// ── History (localStorage) ────────────────────────────────────
+const HIST_MAX = 10;
+
+function loadEmailHistory() {
+  try { return JSON.parse(localStorage.getItem('rstt_email_hist') || '[]'); } catch { return []; }
+}
+function loadDomainHistory() {
+  try { return JSON.parse(localStorage.getItem('rstt_domain_hist') || '[]'); } catch { return []; }
+}
+
+function saveEmailHistory(from, to, subject) {
+  const hist = loadEmailHistory().filter(h => !(h.from===from && h.to===to));
+  hist.unshift({ from, to, subject, ts: new Date().toISOString() });
+  localStorage.setItem('rstt_email_hist', JSON.stringify(hist.slice(0, HIST_MAX)));
+  refreshHistoryDatalist('emails');
+}
+function saveDomainHistory(domain) {
+  const hist = loadDomainHistory().filter(d => d !== domain);
+  hist.unshift(domain);
+  localStorage.setItem('rstt_domain_hist', JSON.stringify(hist.slice(0, HIST_MAX)));
+  refreshHistoryDatalist('domains');
+}
+
+function refreshHistoryDatalist(type) {
+  if (type === 'emails') {
+    const hist = loadEmailHistory();
+    const addresses = [...new Set(hist.flatMap(h => [h.from, h.to]))];
+    const opts = addresses.map(a => `<option value="${esc(a)}">`).join('');
+    document.getElementById('fromHistoryList').innerHTML = opts;
+    document.getElementById('toHistoryList').innerHTML = opts;
+  } else if (type === 'domains') {
+    const opts = loadDomainHistory().map(d => `<option value="${esc(d)}">`).join('');
+    document.getElementById('domainHistoryList').innerHTML = opts;
+  }
+}
+
 // ── Resend API Templates ──────────────────────────────────────
 async function loadTemplates() {
   const apiKey=document.getElementById('apiKey').value.trim();
   if(!apiKey){showToast('Enter your API key first');return;}
   const btn=document.getElementById('loadTplsBtn'); btn.textContent='Loading…';btn.disabled=true;
   try {
-    const res=await fetch('/api/templates',{headers:{'x-api-key':apiKey}});
+    const res=await authFetch('/api/templates',{headers:{'x-api-key':apiKey}});
     const data=await res.json();
     if(data.error||!res.ok){showToast('Error: '+(data.error?.message||JSON.stringify(data.error)));return;}
     const templates=data.data||data.templates||data||[];
@@ -407,7 +587,7 @@ async function loadTemplates() {
     list.forEach(t=>{const opt=document.createElement('option');opt.value=t.id;opt.textContent=t.name||t.id;sel.appendChild(opt);});
     document.getElementById('importTplBtn').disabled=false;
     showToast(`${list.length} template(s) loaded`);
-  } catch(e){showToast('Network error: '+e.message);}
+  } catch(e){if(e.message!=='Session expired. Please sign in again.')showToast('Network error: '+e.message);}
   finally{btn.textContent='Fetch';btn.disabled=false;}
 }
 
@@ -417,20 +597,20 @@ async function importTemplate() {
   const apiKey=document.getElementById('apiKey').value.trim();
   const btn=document.getElementById('importTplBtn'); btn.textContent='Importing…';btn.disabled=true;
   try {
-    const res=await fetch(`/api/templates/${id}`,{headers:{'x-api-key':apiKey}});
+    const res=await authFetch(`/api/templates/${id}`,{headers:{'x-api-key':apiKey}});
     const data=await res.json();
     if(data.error||!res.ok){showToast('Error: '+(data.error?.message||JSON.stringify(data.error)));return;}
     document.getElementById('htmlBody').value=data.html_content||data.html||data.content||'';
     if(currentEditorTab==='preview') refreshPreview();
     showToast('Template imported ✓');
-  } catch(e){showToast('Network error: '+e.message);}
+  } catch(e){if(e.message!=='Session expired. Please sign in again.')showToast('Network error: '+e.message);}
   finally{btn.textContent='Import';btn.disabled=false;}
 }
 
 // ── react.email Templates ─────────────────────────────────────
-(async function loadReactEmailList() {
+async function loadReactEmailList() {
   try {
-    const res = await fetch('/api/react-email-templates');
+    const res = await authFetch('/api/react-email-templates');
     const data = await res.json();
     const sel = document.getElementById('reactEmailSelect');
     (data.templates || []).forEach(t => {
@@ -439,7 +619,7 @@ async function importTemplate() {
       sel.appendChild(opt);
     });
   } catch(e) { console.warn('Could not load react.email list', e); }
-})();
+}
 
 async function importReactEmailTemplate() {
   const sel = document.getElementById('reactEmailSelect');
@@ -448,33 +628,39 @@ async function importReactEmailTemplate() {
   const btn = document.getElementById('reactEmailBtn');
   btn.textContent = 'Loading…'; btn.disabled = true;
   try {
-    const res = await fetch(`/api/react-email-templates/source?path=${encodeURIComponent(path)}`);
+    const res = await authFetch(`/api/react-email-templates/source?path=${encodeURIComponent(path)}`);
     const data = await res.json();
     if (data.error) { showToast('Error: ' + data.error); return; }
     document.getElementById('htmlBody').value = data.html;
     if (currentEditorTab === 'preview') refreshPreview();
     showToast('Template imported as HTML ✓');
-  } catch(e) { showToast('Error: ' + e.message); }
+  } catch(e) { if(e.message!=='Session expired. Please sign in again.')showToast('Error: ' + e.message); }
   finally { btn.textContent = 'Import'; btn.disabled = false; }
 }
 
 // ── Email send ────────────────────────────────────────────────
 let resultCount=0;
+const resultData=[];
+
 async function sendEmail() {
   const apiKey=document.getElementById('apiKey').value.trim(), from=document.getElementById('from').value.trim(), to=document.getElementById('to').value.trim(), subject=document.getElementById('subject').value.trim(), html=document.getElementById('htmlBody').value;
   if(!apiKey){showToast('API key required');return;} if(!from){showToast('From required');return;} if(!to){showToast('To required');return;} if(!subject){showToast('Subject required');return;} if(!html){showToast('Body required');return;}
   setEmailSending(true); const t0=Date.now();
   try {
-    const res=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,from,to,subject,html})});
+    const res=await authFetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,from,to,subject,html})});
     const data=await res.json();
-    appendEmailResult(res.ok&&data.success,data,{from,to,subject,elapsed:Date.now()-t0});
-  } catch(e){ appendEmailResult(false,{error:{message:e.message}},{from,to,subject,elapsed:Date.now()-t0}); }
+    const elapsed=Date.now()-t0;
+    const ok=res.ok&&data.success;
+    appendEmailResult(ok,data,{from,to,subject,elapsed});
+    if(ok) saveEmailHistory(from,to,subject);
+  } catch(e){ if(e.message!=='Session expired. Please sign in again.') appendEmailResult(false,{error:{message:e.message}},{from,to,subject,elapsed:Date.now()-t0}); }
   finally{setEmailSending(false);}
 }
 function setEmailSending(on) { const btn=document.getElementById('sendBtn'); btn.disabled=on; document.getElementById('sendIcon').innerHTML=on?'<div class="spinner"></div>':'→'; document.getElementById('sendLabel').textContent=on?'Sending…':'Send Email'; }
 function appendEmailResult(ok,data,meta) {
   document.getElementById('emptyState')?.remove(); resultCount++; setStatus(ok?'success':'error'); updateCount(); showFooter();
   const payload=ok?data.data:data.error;
+  resultData.unshift({type:'email',timestamp:new Date().toISOString(),status:ok?'success':'error',from:meta.from,to:meta.to,subject:meta.subject,elapsed:meta.elapsed,response:payload});
   const card=document.createElement('div'); card.className=`result-card ${ok?'success':'error'}`;
   card.innerHTML=`<div class="rc-head">${ok?'✓ Delivered':'✗ Failed'}<span class="rc-time">${meta.elapsed}ms · ${ts()}</span></div><div class="rc-body"><div class="rc-row"><span class="rc-key">from</span><span class="rc-val">${esc(meta.from)}</span></div><div class="rc-row"><span class="rc-key">to</span><span class="rc-val">${esc(meta.to)}</span></div><div class="rc-row"><span class="rc-key">subject</span><span class="rc-val">${esc(meta.subject)}</span></div><div class="rc-json">${syntaxHighlight(payload)}</div></div>`;
   prepend(card);
@@ -488,8 +674,13 @@ function quickLookup(type) { document.querySelectorAll('.type-chip').forEach(c=>
 async function dnsLookup() {
   const domain=document.getElementById('dnsDomain').value.trim(); if(!domain){showToast('Enter a domain');return;}
   setDnsLooking(true); const t0=Date.now();
-  try { const res=await fetch(`/api/dns?domain=${encodeURIComponent(domain)}&type=${selectedType}`); const data=await res.json(); appendDnsResult(data,Date.now()-t0); }
-  catch(e){ appendDnsResult({domain,type:selectedType,results:{},errors:{_:e.message}},Date.now()-t0); }
+  try {
+    const res=await authFetch(`/api/dns?domain=${encodeURIComponent(domain)}&type=${selectedType}`);
+    const data=await res.json();
+    appendDnsResult(data,Date.now()-t0);
+    saveDomainHistory(data.domain||domain);
+  }
+  catch(e){ if(e.message!=='Session expired. Please sign in again.') appendDnsResult({domain,type:selectedType,results:{},errors:{_:e.message}},Date.now()-t0); }
   finally{setDnsLooking(false);}
 }
 function setDnsLooking(on) { const btn=document.getElementById('lookupBtn'); btn.disabled=on; document.getElementById('lookupIcon').innerHTML=on?'<div class="spinner"></div>':'⌕'; document.getElementById('lookupLabel').textContent=on?'Looking up…':'Lookup'; }
@@ -498,6 +689,7 @@ function appendDnsResult(data,elapsed) {
   document.getElementById('emptyState')?.remove(); resultCount++;
   const hasResults=Object.keys(data.results||{}).some(k=>{const v=data.results[k];return v&&(Array.isArray(v)?v.length>0:true);});
   setStatus(hasResults?'info':'error'); updateCount(); showFooter();
+  resultData.unshift({type:'dns',timestamp:new Date().toISOString(),status:hasResults?'info':'error',domain:data.domain,recordType:data.type,results:data.results,errors:data.errors,elapsed:data.elapsed||elapsed});
   const card=document.createElement('div'); card.className='result-card dns';
   const typeLabel=data.type==='ANY'?'ALL Records':data.type;
   const resolver=data.resolver?`<span class="dns-resolver-badge">via ${esc(data.resolver)}</span>`:'';
@@ -524,12 +716,34 @@ function dnsErrFriendly(c) { const m={ENODATA:'No records of this type',ENOTFOUN
 function renderRecordType(type,data) {
   if(!data||!data.length) return '<div class="err-note">No records</div>';
   switch(type) {
-    case 'MX': return renderTable(['Priority','Exchange','TTL'],data.map(r=>[`<span class="priority-badge">${r.priority}</span>`,esc(r.exchange||r.value||r.raw),`<span class="ttl-badge">${r.ttl}s</span>`]));
-    case 'TXT': return renderTable(['Value','TTL'],data.map(r=>[`<span class="txt-val">${esc(r.value||r.raw)}</span>`,r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
-    case 'A': case 'AAAA': return renderTable(['Address','TTL'],data.map(r=>[esc(r.value||r.raw),r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
-    case 'CNAME': case 'NS': case 'PTR': return renderTable(['Value','TTL'],data.map(r=>[esc(r.value||r.raw),r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
-    case 'SOA': if(data[0]){const s=data[0]; return `<table class="dns-table"><tbody><tr><th>Primary NS</th><td>${esc(s.mname||'')}</td></tr><tr><th>Responsible</th><td>${esc(s.rname||'')}</td></tr><tr><th>Serial</th><td>${s.serial||''}</td></tr><tr><th>Refresh</th><td>${s.refresh||''}s</td></tr><tr><th>Retry</th><td>${s.retry||''}s</td></tr><tr><th>Expire</th><td>${s.expire||''}s</td></tr><tr><th>TTL</th><td><span class="ttl-badge">${s.ttl||''}s</span></td></tr></tbody></table>`;}
-    default: return `<div class="rc-json">${syntaxHighlight(data)}</div>`;
+    case 'MX':
+      return renderTable(['Priority','Exchange','TTL'],data.map(r=>[`<span class="priority-badge">${r.priority}</span>`,esc(r.exchange||r.value||r.raw),`<span class="ttl-badge">${r.ttl}s</span>`]));
+    case 'TXT':
+      return renderTable(['Value','TTL'],data.map(r=>[`<span class="txt-val">${esc(r.value||r.raw)}</span>`,r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
+    case 'A': case 'AAAA':
+      return renderTable(['Address','TTL'],data.map(r=>[esc(r.value||r.raw),r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
+    case 'CNAME': case 'NS': case 'PTR':
+      return renderTable(['Value','TTL'],data.map(r=>[esc(r.value||r.raw),r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:'']));
+    case 'SOA':
+      if(data[0]){const s=data[0]; return `<table class="dns-table"><tbody><tr><th>Primary NS</th><td>${esc(s.mname||'')}</td></tr><tr><th>Responsible</th><td>${esc(s.rname||'')}</td></tr><tr><th>Serial</th><td>${s.serial||''}</td></tr><tr><th>Refresh</th><td>${s.refresh||''}s</td></tr><tr><th>Retry</th><td>${s.retry||''}s</td></tr><tr><th>Expire</th><td>${s.expire||''}s</td></tr><tr><th>TTL</th><td><span class="ttl-badge">${s.ttl||''}s</span></td></tr></tbody></table>`;}
+      break;
+    case 'SRV':
+      return renderTable(['Priority','Weight','Port','Target','TTL'],data.map(r=>[
+        `<span class="priority-badge">${r.priority}</span>`,
+        r.weight,
+        `<span style="color:var(--cyan);font-weight:600">${r.port}</span>`,
+        esc(r.target||r.raw),
+        r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:''
+      ]));
+    case 'CAA':
+      return renderTable(['Flags','Tag','Value','TTL'],data.map(r=>[
+        r.flags||0,
+        `<span style="color:var(--orange);font-weight:600">${esc(r.tag||'')}</span>`,
+        esc(r.value||r.raw),
+        r.ttl!=null?`<span class="ttl-badge">${r.ttl}s</span>`:''
+      ]));
+    default:
+      return `<div class="rc-json">${syntaxHighlight(data)}</div>`;
   }
 }
 function renderTable(h,rows) { return `<table class="dns-table"><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`; }
@@ -537,12 +751,19 @@ function renderTable(h,rows) { return `<table class="dns-table"><thead><tr>${h.m
 async function runEmailDiag() {
   const domain=document.getElementById('dnsDomain').value.trim(); if(!domain){showToast('Enter a domain');return;}
   setDnsLooking(true);
-  try { const res=await fetch(`/api/dns/email-diag?domain=${encodeURIComponent(domain)}`); const data=await res.json(); appendDiagResult(data); }
-  catch(e){showToast('Error: '+e.message);} finally{setDnsLooking(false);}
+  try {
+    const res=await authFetch(`/api/dns/email-diag?domain=${encodeURIComponent(domain)}`);
+    const data=await res.json();
+    appendDiagResult(data);
+    saveDomainHistory(data.domain||domain);
+  }
+  catch(e){if(e.message!=='Session expired. Please sign in again.')showToast('Error: '+e.message);}
+  finally{setDnsLooking(false);}
 }
 function appendDiagResult(data) {
   document.getElementById('emptyState')?.remove(); resultCount++;
   const hasFail=data.checks.some(c=>c.status==='fail'); setStatus(hasFail?'error':'info'); updateCount(); showFooter();
+  resultData.unshift({type:'diag',timestamp:new Date().toISOString(),status:hasFail?'error':'info',domain:data.domain,checks:data.checks,elapsed:data.elapsed});
   const icons={pass:'✅',fail:'❌',warn:'⚠️',info:'ℹ️'};
   let ch=''; for(const c of data.checks) {
     let rec=''; if(c.records) rec=c.records.map(r=>`<div class="diag-record">${r.priority!=null?'['+r.priority+'] ':''}${esc(r.exchange||r.value||r.raw||'')}</div>`).join('');
@@ -553,17 +774,49 @@ function appendDiagResult(data) {
   prepend(card);
 }
 
+// ── Export ────────────────────────────────────────────────────
+function exportJSON() {
+  if(!resultData.length){showToast('No results to export');return;}
+  const blob=new Blob([JSON.stringify(resultData,null,2)],{type:'application/json'});
+  downloadBlob(blob,`resend-toolkit-${isoStamp()}.json`);
+  showToast(`Exported ${resultData.length} result(s) as JSON`);
+}
+
+function exportCSV() {
+  if(!resultData.length){showToast('No results to export');return;}
+  const headers=['type','timestamp','status','from','to','subject','domain','record_type','elapsed_ms','detail'];
+  const rows=resultData.map(r=>[
+    r.type, r.timestamp, r.status,
+    r.from||'', r.to||'', r.subject||'',
+    r.domain||'', r.recordType||'',
+    r.elapsed||'',
+    JSON.stringify(r.response||r.results||r.checks||''),
+  ]);
+  const csv=[headers,...rows].map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  downloadBlob(blob,`resend-toolkit-${isoStamp()}.csv`);
+  showToast(`Exported ${resultData.length} result(s) as CSV`);
+}
+
+function downloadBlob(blob,filename) {
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function isoStamp() { return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); }
+
 // ── Helpers ───────────────────────────────────────────────────
 function setStatus(t){document.getElementById('statusDot').className='status-dot '+t;}
 function updateCount(){document.getElementById('resultCount').textContent=resultCount+(resultCount===1?' result':' results');}
 function prepend(el){document.getElementById('resultBody').insertBefore(el,document.getElementById('resultBody').firstChild);}
 function showFooter(){document.getElementById('resultFooter').classList.add('show');}
 function ts(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-function clearResults(){document.getElementById('resultBody').innerHTML='<div class="empty-state" id="emptyState"><div class="empty-icon">📭</div><div class="empty-label">No results yet</div></div>';resultCount=0;document.getElementById('resultCount').textContent='';document.getElementById('statusDot').className='status-dot';document.getElementById('resultFooter').classList.remove('show');}
+function clearResults(){document.getElementById('resultBody').innerHTML='<div class="empty-state" id="emptyState"><div class="empty-icon">📭</div><div class="empty-label">No results yet</div></div>';resultCount=0;resultData.length=0;document.getElementById('resultCount').textContent='';document.getElementById('statusDot').className='status-dot';document.getElementById('resultFooter').classList.remove('show');}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function syntaxHighlight(obj){if(obj==null)return'<span class="json-null">null</span>';const j=JSON.stringify(obj,null,2);return j.replace(/(\"(?:\\\\u[a-zA-Z0-9]{4}|\\\\[^u]|[^\\\\\"])*\"(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,m=>{let c='json-num';if(/^\"/.test(m))c=/:$/.test(m)?'json-key':'json-str';else if(/true|false/.test(m))c='json-bool';else if(/null/.test(m))c='json-null';return`<span class="${c}">${esc(m)}</span>`;});}
 let toastTimer;function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3000);}
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')sendEmail();});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'&&document.getElementById('loginOverlay').classList.contains('hidden'))sendEmail();});
 </script>
 </body>
 </html>
