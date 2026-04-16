@@ -221,11 +221,28 @@ app.get("/api/react-email-templates/source", requireAuth, async (req, res) => {
   const { path: tplPath } = req.query;
   if (!tplPath) return res.status(400).json({ error: "Missing path" });
 
+  const apiUrl = `https://api.github.com/repos/resend/react-email/contents/apps/demo/emails/${tplPath}.tsx?ref=canary`;
   const rawUrl = `https://raw.githubusercontent.com/resend/react-email/canary/apps/demo/emails/${tplPath}.tsx`;
+
   try {
-    const response = await fetch(rawUrl, { headers: { "User-Agent": "resend-tester" } });
-    if (!response.ok) return res.status(response.status).json({ error: `Could not fetch template from GitHub (${response.status}). The template path may have changed.` });
-    const source = await response.text();
+    let source = null;
+
+    // Primary: GitHub Contents API (works from cloud servers, avoids raw CDN blocks)
+    const apiRes = await fetch(apiUrl, {
+      headers: { "User-Agent": "resend-toolkit", "Accept": "application/vnd.github.v3+json" },
+    });
+    if (apiRes.ok) {
+      const json = await apiRes.json();
+      source = Buffer.from(json.content, "base64").toString("utf-8");
+    } else {
+      // Fallback: raw CDN
+      const rawRes = await fetch(rawUrl, { headers: { "User-Agent": "resend-toolkit" } });
+      if (!rawRes.ok) {
+        return res.status(404).json({ error: `Template not found: ${tplPath} (GitHub ${rawRes.status})` });
+      }
+      source = await rawRes.text();
+    }
+
     const html = await renderReactEmailTemplate(source, tplPath);
     return res.json({ html, rawUrl });
   } catch (err) {
